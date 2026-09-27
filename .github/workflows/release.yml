@@ -28,7 +28,7 @@ jobs:
         with:
           python-version: '3.10'
 
-      - run: pip install pytest
+      - run: pip install pytest requests
       - run: pytest tests/
 
       # Tags are the source of truth for "next N" per channel — no separate counter file.
