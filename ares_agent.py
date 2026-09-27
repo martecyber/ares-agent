@@ -45,7 +45,7 @@ def _log(tag: str, msg: str) -> None:
 # Bumped on each release; reported in heartbeats so the server can drive auto-update.
 # Must match `ares.versions.agent` in the platform's application.yml — the agent will
 # fetch the new script and self-restart whenever the server version is strictly newer.
-AGENT_VERSION = "1.0.0-beta21"
+AGENT_VERSION = "1.0.0-beta1"
 
 # Base directory for per-task working directories. Set by cmd_run from --workdir
 # or ARES_WORKDIR; None means let tempfile use the OS default (usually /tmp).
