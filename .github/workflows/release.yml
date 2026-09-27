@@ -1,0 +1,83 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "Release channel"
+        required: true
+        type: choice
+        options: [release, rc, beta, alpha]
+      base_version:
+        description: "Override MAJOR.MINOR.PATCH (blank = keep current)"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.10'
+
+      - run: pip install pytest
+      - run: pytest tests/
+
+      # Tags are the source of truth for "next N" per channel — no separate counter file.
+      - name: Compute release version
+        id: ver
+        run: |
+          set -euo pipefail
+          CURRENT="$(grep -m1 -oP '(?<=AGENT_VERSION = ")[^"]+' ares_agent.py)"
+          MMP="${{ inputs.base_version }}"
+          if [ -z "$MMP" ]; then
+            MMP="$(echo "$CURRENT" | sed -E 's/-.*$//')"
+          fi
+          CHANNEL="${{ inputs.channel }}"
+          if [ "$CHANNEL" = "release" ]; then
+            VERSION="$MMP"
+            TAG="v${MMP}"
+          else
+            PREFIX="v${MMP}-${CHANNEL}"
+            LAST="$(git tag -l "${PREFIX}*" | sed -E "s/^${PREFIX}//" | sort -n | tail -1)"
+            NEXT=$(( ${LAST:-0} + 1 ))
+            VERSION="${MMP}-${CHANNEL}${NEXT}"
+            TAG="${PREFIX}${NEXT}"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Bump version, commit, and tag
+        run: |
+          set -euo pipefail
+          sed -i -E "s#^AGENT_VERSION = \"[^\"]+\"#AGENT_VERSION = \"${{ steps.ver.outputs.version }}\"#" ares_agent.py
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add ares_agent.py
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: release ${{ steps.ver.outputs.tag }}"
+          else
+            echo "already at ${{ steps.ver.outputs.version }} — tagging current HEAD without a new commit"
+          fi
+          git tag "${{ steps.ver.outputs.tag }}"
+          git push origin HEAD:main "${{ steps.ver.outputs.tag }}"
+
+      # ares-core fetches THIS release's asset (latest by default) to embed the agent it
+      # serves for download/auto-update — see that repo's own workflow for the consuming side.
+      - name: Create GitHub Release with the script as an asset
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.ver.outputs.tag }}" \
+            ares_agent.py \
+            --title "${{ steps.ver.outputs.tag }}" \
+            --notes "Automated release, channel: ${{ inputs.channel }}" \
+            --prerelease=$([ "${{ inputs.channel }}" = "release" ] && echo false || echo true)
