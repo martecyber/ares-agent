@@ -1080,7 +1080,7 @@ def cmd_run(args):
 
     if _browser_found:
         # Rebuild the wrapper every startup so flag changes in new releases take effect.
-        _wrapper_dir = _WORKDIR_BASE if _WORKDIR_BASE else _pathlib.Path("/tmp")
+        _wrapper_dir = _WORKDIR_BASE if _WORKDIR_BASE else Path("/tmp")
         _wrapper_path = _wrapper_dir / "chrome-no-sandbox.sh"
         try:
             _wrapper_path.write_text(
